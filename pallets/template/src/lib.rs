@@ -123,14 +123,14 @@ pub mod pallet {
 		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
 		pub fn submit_number_unsigned(_origin:OriginFor<T>, number: u64)-> DispatchResult {
-			log::info!("=====>submit_number_unsigned: ({})", number);
+			log::info!("=====>input number is : ({})", number);
 
 			let block_number =  frame_system::Pallet::<T>::block_number();
-			log::info!("=====> submit_number_unsigned:block_number is {:?}.",&block_number);
+			log::info!("=====>block_number is {:?}.",&block_number);
 
 
 			let key = Self::derived_key(block_number);
-			log::info!("=====> submit_number_unsigned:derived Key is {:?}.", str::from_utf8(&key).unwrap_or("error"));
+			log::info!("=====>derived Key is {:?}.", str::from_utf8(&key).unwrap_or("error"));
 
 			let data = IndexingData(b"submit_number_unsigned".to_vec(), number);
 			offchain_index::set(&key, &data.encode());
@@ -150,10 +150,10 @@ pub mod pallet {
 			log::info!("=====> offchain_worker:derived Key is {:?}.", str::from_utf8(&key).unwrap_or("error"));
 		
 			if let Ok(Some(data)) = storage_ref.get::<IndexingData>() {
-				log::info!("=====>local storage data: {:?}, {:?}",
+				log::info!("=====>offchain_worker:local storage data: {:?}, {:?}",
 					str::from_utf8(&data.0).unwrap_or("error"), data.1);
 			} else {
-				log::info!("=====>Nothing reading from local storage.");
+				log::info!("=====>offchain_worker:Nothing reading from local storage.");
 			}
 		}
 	}
