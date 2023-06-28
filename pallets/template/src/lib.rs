@@ -15,6 +15,20 @@ mod tests;
 mod benchmarking;
 pub mod weights;
 pub use weights::*;
+use sp_io::offchain_index;
+
+use core::str;
+use codec::{Encode, Decode};
+use frame_support::inherent::Vec;
+use serde::{Deserialize};
+use sp_runtime::offchain::storage::StorageValueRef;
+
+
+
+#[derive(Debug, Deserialize, Encode, Decode, Default)]
+struct IndexingData(Vec<u8>, u64);
+
+const ONCHAIN_TX_KEY: &[u8] = b"template_pallet::indexing";
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -50,6 +64,7 @@ pub mod pallet {
 		/// Event documentation should end with an array that provides descriptive names for event
 		/// parameters. [something, who]
 		SomethingStored { something: u32, who: T::AccountId },
+		NewNumber{who:Option<T::AccountId>, number:u64},
 	}
 
 	// Errors inform users that something went wrong.
@@ -104,5 +119,57 @@ pub mod pallet {
 				},
 			}
 		}
+
+		#[pallet::call_index(2)]
+		#[pallet::weight(0)]
+		pub fn submit_number_unsigned(_origin:OriginFor<T>, number: u64)-> DispatchResult {
+			log::info!("=====>submit_number_unsigned: ({})", number);
+
+			let block_number =  frame_system::Pallet::<T>::block_number();
+			log::info!("=====> submit_number_unsigned:block_number is {:?}.",&block_number);
+
+
+			let key = Self::derived_key(block_number);
+			log::info!("=====> submit_number_unsigned:derived Key is {:?}.", str::from_utf8(&key).unwrap_or("error"));
+
+			let data = IndexingData(b"submit_number_unsigned".to_vec(), number);
+			offchain_index::set(&key, &data.encode());
+
+		// 	Self::deposit_event(Event::NewNumber{who:None, number});
+			Ok(())
+		}
 	}
+
+		  
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn offchain_worker(block_number: T::BlockNumber) {
+			let key = Self::derived_key(block_number);
+			log::info!("=====> offchain_worker:block_number is {:?}.",&block_number);
+			let storage_ref = StorageValueRef::persistent(&key);
+			log::info!("=====> offchain_worker:derived Key is {:?}.", str::from_utf8(&key).unwrap_or("error"));
+		
+			if let Ok(Some(data)) = storage_ref.get::<IndexingData>() {
+				log::info!("=====>local storage data: {:?}, {:?}",
+					str::from_utf8(&data.0).unwrap_or("error"), data.1);
+			} else {
+				log::info!("=====>Nothing reading from local storage.");
+			}
+		}
+	}
+
+
+
+	impl<T: Config> Pallet<T>  {
+		fn derived_key(block_number: T::BlockNumber) -> Vec<u8> {
+            block_number.using_encoded(|encoded_bn| {
+                ONCHAIN_TX_KEY.clone().into_iter()
+                    .chain(b"/".into_iter())
+                    .chain(encoded_bn)
+                    .copied()
+                    .collect::<Vec<u8>>()
+            })
+        }
+	  }
+
 }
